@@ -8,7 +8,8 @@ import {
   BarChart3, 
   Bell,
   Menu,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import { useTranslation } from '../../i18n/useTranslation';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'autopay', label: t('automaticPayments'), icon: Send },
     { id: 'statistics', label: t('statistics'), icon: BarChart3 },
     { id: 'notifications', label: t('notifications'), icon: Bell },
+    { id: 'addproducts', label: t('Addproducts'), icon: Plus },
   ];
 
   return (
