@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { UserManagement } from "./components/Dashboard/UserManagement";
 import { PaymentHistory } from "./components/Dashboard/PaymentHistory";
@@ -8,7 +8,11 @@ import { AutomaticPayments } from "./components/Dashboard/AutomaticPayments";
 import { Statistics } from "./components/Dashboard/Statistics";
 import { NotificationSystem } from "./components/Dashboard/NotificationSystem";
 import AddProduct from "./components/Dashboard/Addproducts";
+import CoinAmount from "./components/Dashboard/CoinAmount";
 import LoginPage from "./pages/LoginPage";
+// import { io } from "socket.io-client";
+import UserDetail from "./components/Dashboard/UserDetail";
+import GetCoin from "./components/Dashboard/GetCoin";
 
 function App() {
   const [activeSection, setActiveSection] = useState("users");
@@ -20,10 +24,47 @@ function App() {
     setIsAuthenticated(!!token);
   }, []);
 
+  // // Shu yerdan qilamiz
+  // const socketRef = useRef();
+  // useEffect(() => {
+  //   const token = localStorage.getItem("token");
+  //   const socket = io("https://mlm-backend.pixl.uz/", {
+  //     auth: { token },
+  //   });
+
+  //   socketRef.current = socket;
+
+  //   socket.on("connect", () => {
+  //     console.log("🔌 Ulandi:", socket.id);
+  //   });
+
+  //   socket.on("newPayment", (data) => {
+  //     console.log(data);
+  //   });
+
+  //   return () => {
+  //     socket.disconnect(); // komponent unmount bo‘lganda socketni uzish
+  //   };
+  // }, []);
+  // // Shu yerdan qilamiz
+
+  // ...existing code...
   const renderContent = () => {
+    // Agar activeSection "user/:id" formatida bo‘lsa, id ni ajratib olamiz
+    if (activeSection.startsWith("user/")) {
+      const userId: any = activeSection.split("/")[1];
+      return <UserDetail userId={userId} />;
+    }
+
     switch (activeSection) {
       case "users":
-        return <UserManagement />;
+        return (
+          <UserManagement
+            onUserClick={(id: string) => setActiveSection(`user/${id}`)}
+          />
+        );
+      case "addproducts":
+        return <AddProduct />;
       case "payments":
         return <PaymentHistory />;
       case "withdrawals":
@@ -36,12 +77,19 @@ function App() {
         return <Statistics />;
       case "notifications":
         return <NotificationSystem />;
-      case "addproducts":
-        return <AddProduct />;
+      case "coinAmount":
+        return <CoinAmount />;
+      case "getCoin":
+        return <GetCoin />;
       default:
-        return <UserManagement />;
+        return (
+          <UserManagement
+            onUserClick={(id: string) => setActiveSection(`user/${id}`)}
+          />
+        );
     }
   };
+  // ...existing code...
 
   if (!isAuthenticated) {
     return <LoginPage />;

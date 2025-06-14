@@ -1,284 +1,340 @@
-import React, { useState } from 'react';
-import { Send, Bell, Eye, Trash2, Plus, Users, AlertCircle, CheckCircle, Info } from 'lucide-react';
-import { Notification } from '../../types';
-import { mockNotifications } from '../../data/mockData';
+import { useState } from "react";
+import {
+  Send,
+  Users,
+  User,
+  Mail,
+  MessageSquare,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-export const NotificationSystem: React.FC = () => {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newNotification, setNewNotification] = useState<Partial<Notification>>({
-    title: '',
-    message: '',
-    type: 'Info',
-    recipients: 'All'
+type NotificationMode = "single" | "all";
+
+interface FormData {
+  email: string;
+  title: string;
+  description: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  message: string;
+}
+
+export function NotificationSystem() {
+  const [mode, setMode] = useState<NotificationMode>("single");
+  const [formData, setFormData] = useState<FormData>({
+    email: "",
+    title: "",
+    description: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [response, setResponse] = useState<ApiResponse | null>(null);
+  const [errors, setErrors] = useState<Partial<FormData>>({});
+  const navigate = useNavigate();
 
-  const handleCreateNotification = () => {
-    if (newNotification.title && newNotification.message) {
-      const notification: Notification = {
-        id: `n${Date.now()}`,
-        title: newNotification.title,
-        message: newNotification.message,
-        type: newNotification.type || 'Info',
-        createdDate: new Date().toISOString().split('T')[0],
-        isRead: false,
-        recipients: newNotification.recipients || 'All'
-      };
-      
-      setNotifications([notification, ...notifications]);
-      setNewNotification({ title: '', message: '', type: 'Info', recipients: 'All' });
-      setIsCreating(false);
-      
-      // Simulate sending notification
-      alert(`Notification "${notification.title}" has been sent to ${notification.recipients} users!`);
+  const validateForm = (): boolean => {
+    const newErrors: Partial<FormData> = {};
+
+    if (mode === "single" && !formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (
+      mode === "single" &&
+      formData.email &&
+      !isValidEmail(formData.email)
+    ) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!formData.title.trim()) {
+      newErrors.title = "Title is required";
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-  };
+  const sendNotification = async () => {
+    if (!validateForm()) return;
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, isRead: true } : n
-    ));
-  };
+    setLoading(true);
+    setResponse(null);
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'Success': return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'Warning': return <AlertCircle className="w-5 h-5 text-yellow-600" />;
-      case 'Error': return <AlertCircle className="w-5 h-5 text-red-600" />;
-      case 'Info': return <Info className="w-5 h-5 text-blue-600" />;
-      default: return <Bell className="w-5 h-5 text-gray-600" />;
-    }
-  };
+    try {
+      const url =
+        mode === "single"
+          ? "https://mlm-backend.pixl.uz/notification"
+          : "https://mlm-backend.pixl.uz/notification/all";
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'Success': return 'bg-green-100 text-green-800 border-green-200';
-      case 'Warning': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Error': return 'bg-red-100 text-red-800 border-red-200';
-      case 'Info': return 'bg-blue-100 text-blue-800 border-blue-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
+      const payload =
+        mode === "single"
+          ? {
+              email: formData.email,
+              title: formData.title,
+              description: formData.description,
+            }
+          : {
+              title: formData.title,
+              description: formData.description,
+            };
 
-  const getRecipientColor = (recipients: string) => {
-    switch (recipients) {
-      case 'All': return 'bg-gray-100 text-gray-800';
-      case 'Basic': return 'bg-blue-100 text-blue-800';
-      case 'Premium': return 'bg-purple-100 text-purple-800';
-      case 'Enterprise': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.status === 401) {
+        // Redirect to login page if unauthorized
+        navigate("/login");
+        return;
+      }
+
+      if (response.ok) {
+        setResponse({
+          success: true,
+          message:
+            mode === "single"
+              ? "Notification sent successfully to user!"
+              : "Notification sent successfully to all users!",
+        });
+        // Reset form on success
+        setFormData({ email: "", title: "", description: "" });
+      } else {
+        throw new Error("Failed to send notification");
+      }
+    } catch (error) {
+      setResponse({
+        success: false,
+        message: "Failed to send notification. Please try again.",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Notification System</h2>
-            <p className="text-gray-600">Send and manage notifications to users</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-4">
+            <MessageSquare className="w-8 h-8 text-blue-600" />
           </div>
-          <button
-            onClick={() => setIsCreating(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Notification
-          </button>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Notification Center
+          </h1>
+          <p className="text-gray-600">Send notifications to users instantly</p>
         </div>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <div className="flex items-center">
-            <Bell className="w-8 h-8 text-blue-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-blue-900">Total Notifications</p>
-              <p className="text-2xl font-bold text-blue-600">{notifications.length}</p>
+        {/* Main Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+          {/* Mode Toggle */}
+          <div className="p-6 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center justify-center">
+              <div className="bg-white rounded-xl p-1 shadow-sm border border-gray-200">
+                <button
+                  onClick={() => setMode("single")}
+                  className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    mode === "single"
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Single User
+                </button>
+                <button
+                  onClick={() => setMode("all")}
+                  className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    mode === "all"
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  All Users
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-          <div className="flex items-center">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-green-900">Read</p>
-              <p className="text-2xl font-bold text-green-600">
-                {notifications.filter(n => n.isRead).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-          <div className="flex items-center">
-            <AlertCircle className="w-8 h-8 text-yellow-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-yellow-900">Unread</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {notifications.filter(n => !n.isRead).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-purple-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-purple-900">This Week</p>
-              <p className="text-2xl font-bold text-purple-600">
-                {notifications.filter(n => {
-                  const weekAgo = new Date();
-                  weekAgo.setDate(weekAgo.getDate() - 7);
-                  return new Date(n.createdDate) >= weekAgo;
-                }).length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Create Notification Form */}
-      {isCreating && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Notification</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-              <input
-                type="text"
-                value={newNotification.title}
-                onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter notification title"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-              <select
-                value={newNotification.type}
-                onChange={(e) => setNewNotification({ ...newNotification, type: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="Info">Info</option>
-                <option value="Success">Success</option>
-                <option value="Warning">Warning</option>
-                <option value="Error">Error</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Recipients</label>
-              <select
-                value={newNotification.recipients}
-                onChange={(e) => setNewNotification({ ...newNotification, recipients: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="All">All Users</option>
-                <option value="Basic">Basic Plan Users</option>
-                <option value="Premium">Premium Plan Users</option>
-                <option value="Enterprise">Enterprise Plan Users</option>
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-              <textarea
-                value={newNotification.message}
-                onChange={(e) => setNewNotification({ ...newNotification, message: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={4}
-                placeholder="Enter your notification message"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end space-x-3 mt-6">
-            <button
-              onClick={() => setIsCreating(false)}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreateNotification}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              Send Notification
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Notifications List */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Notifications</h3>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {notifications.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
-              <Bell className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-              <p>No notifications sent yet</p>
-            </div>
-          ) : (
-            notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={`p-6 hover:bg-gray-50 transition-colors ${
-                  !notification.isRead ? 'bg-blue-50' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center mb-2">
-                      {getTypeIcon(notification.type)}
-                      <h4 className="text-lg font-semibold text-gray-900 ml-2">
-                        {notification.title}
-                      </h4>
-                      {!notification.isRead && (
-                        <span className="ml-2 w-2 h-2 bg-blue-600 rounded-full"></span>
-                      )}
+          {/* Form */}
+          <div className="p-6">
+            <div className="space-y-6">
+              {/* Email Field (only for single user mode) */}
+              {mode === "single" && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Recipient Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-gray-400" />
                     </div>
-                    <p className="text-gray-600 mb-3">{notification.message}</p>
-                    <div className="flex items-center space-x-3">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(notification.type)}`}>
-                        {notification.type}
-                      </span>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRecipientColor(notification.recipients)}`}>
-                        {notification.recipients} Users
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {new Date(notification.createdDate).toLocaleDateString()}
-                      </span>
-                    </div>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        handleInputChange("email", e.target.value)
+                      }
+                      className={`block w-full pl-10 pr-3 py-3 border rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                        errors.email
+                          ? "border-red-300 bg-red-50"
+                          : "border-gray-300 hover:border-gray-400"
+                      }`}
+                      placeholder="user@example.com"
+                    />
                   </div>
-                  <div className="flex items-center space-x-2 ml-4">
-                    {!notification.isRead && (
-                      <button
-                        onClick={() => markAsRead(notification.id)}
-                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
-                        title="Mark as read"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                  {errors.email && (
+                    <p className="mt-2 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Title Field */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notification Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => handleInputChange("title", e.target.value)}
+                  className={`block w-full px-4 py-3 border rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                    errors.title
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  placeholder="Enter notification title"
+                />
+                {errors.title && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.title}
+                  </p>
+                )}
+              </div>
+
+              {/* Description Field */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  rows={4}
+                  className={`block w-full px-4 py-3 border rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none ${
+                    errors.description
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  placeholder="Enter your notification message here..."
+                />
+                {errors.description && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Response Message */}
+              {response && (
+                <div
+                  className={`p-4 rounded-xl border ${
+                    response.success
+                      ? "bg-green-50 border-green-200 text-green-800"
+                      : "bg-red-50 border-red-200 text-red-800"
+                  }`}
+                >
+                  <div className="flex items-center">
+                    {response.success ? (
+                      <CheckCircle className="w-5 h-5 mr-2" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 mr-2" />
                     )}
-                    <button
-                      onClick={() => deleteNotification(notification.id)}
-                      className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors"
-                      title="Delete notification"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <span className="font-medium">{response.message}</span>
                   </div>
                 </div>
-              </div>
-            ))
-          )}
+              )}
+
+              {/* Submit Button */}
+              <button
+                onClick={sendNotification}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5 mr-2" />
+                    Send Notification
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center mb-2">
+              <User className="w-5 h-5 text-blue-500 mr-2" />
+              <h3 className="font-semibold text-gray-900">Single User</h3>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Send targeted notifications to specific users by their email
+              address.
+            </p>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center mb-2">
+              <Users className="w-5 h-5 text-green-500 mr-2" />
+              <h3 className="font-semibold text-gray-900">All Users</h3>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Broadcast important announcements to all users in the system.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   );
-};
+}

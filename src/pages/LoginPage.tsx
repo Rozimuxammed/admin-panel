@@ -23,6 +23,8 @@ const LoginPage = () => {
         throw new Error("Login failed");
       }
 
+      console.log(res);
+
       const data = await res.json();
       localStorage.setItem("token", data.token);
       window.location.reload(); // sahifani qayta yuklaydi
